@@ -1,0 +1,7 @@
+[
+  {"id": "file_py_1", "text": "def add(a, b):\n    return a + b", "metadata": {"path": "src/math_utils.py"}},
+  {"id": "file_py_2", "text": "from fastapi import FastAPI\napp = FastAPI()\n@app.get(\"/\")\ndef root():\n    return {\"hello\": \"world\"}", "metadata": {"path": "src/server.py"}},
+  {"id": "file_md_1", "text": "# README\nThis project demonstrates embeddings-based search.", "metadata": {"path": "README.md"}},
+  {"id": "file_sh_1", "text": "#!/usr/bin/env bash\npython -m venv .venv && source .venv/bin/activate", "metadata": {"path": "scripts/setup.sh"}},
+  {"id": "file_py_3", "text": "import numpy as np\nvec = np.array([1.0, 2.0, 3.0])\nvec = vec / np.linalg.norm(vec)", "metadata": {"path": "notebooks/vectors.py"}}
+]
