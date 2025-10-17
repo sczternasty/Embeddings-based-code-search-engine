@@ -4,7 +4,7 @@ import os
 from typing import List
 from fastapi import FastAPI
 from .engine import EmbeddingSearchEngine
-from .models import Document, QueryRequest, ScoredDocument, SearchResponse
+from .models import Document, IndexRequest, QueryRequest, ScoredDocument, SearchResponse
 
 
 def load_documents_from_path(path: str) -> List[Document]:
@@ -26,10 +26,11 @@ def create_app() -> FastAPI:
     app = FastAPI(title="Embeddings Code Search", version="0.1.0")
 
     model_name = os.getenv("EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
+    model_path = os.getenv("FINETUNED_MODEL_PATH", None)
     docs_path = os.getenv("DOCS_PATH", os.path.join(os.path.dirname(__file__), "..", "data", "documents.json"))
     docs_path = os.path.abspath(docs_path)
 
-    engine = EmbeddingSearchEngine(model_name=model_name)
+    engine = EmbeddingSearchEngine(model_name=model_name, model_path=model_path)
 
     def load_initial_docs() -> None:
         docs = load_documents_from_path(docs_path)
@@ -55,10 +56,19 @@ def create_app() -> FastAPI:
         ]
         return SearchResponse(query=body.query, results=results)
 
+    @app.post("/index")
+    def index(body: IndexRequest) -> dict:
+        engine.add_documents(
+            ids=[doc.id for doc in body.documents],
+            texts=[doc.text for doc in body.documents],
+            metadata=[doc.metadata for doc in body.documents],
+        )
+        return {"status": "indexed", "count": len(body.documents)}
+
     @app.post("/reload")
     def reload() -> dict:
         nonlocal engine
-        engine = EmbeddingSearchEngine(model_name=model_name)
+        engine = EmbeddingSearchEngine(model_name=model_name, model_path=model_path)
         load_initial_docs()
         return {"status": "reloaded", "count": len(engine._doc_ids)}
 

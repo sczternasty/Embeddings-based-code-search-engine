@@ -8,6 +8,10 @@ class Document(BaseModel):
     metadata: Optional[dict] = None
 
 
+class IndexRequest(BaseModel):
+    documents: List[Document]
+
+
 class QueryRequest(BaseModel):
     query: str
     k: int = 5

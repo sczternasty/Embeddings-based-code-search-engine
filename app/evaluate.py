@@ -73,29 +73,25 @@ def load_cosqa_hf(split: str = "test") -> Tuple[List[dict], Dict[str, str], Dict
 
     docs: List[dict] = []
     for item in corpus_ds:
-        doc_id = str(item.get("corpus-id") or item.get("doc_id") or item.get("id"))
-        text = str(
-            item.get("text")
-            or item.get("body")
-            or item.get("contents")
-            or item.get("content")
-            or item.get("code")
-            or ""
-        )
-        docs.append({"id": doc_id, "text": text, "metadata": None})
+        doc_id = str(item.get("_id"))
+        text = str(item.get("text"))
+        metadata = {"language":str(item.get("language")), "meta": str(item.get("meta_information"))}
+        if doc_id and text:
+            docs.append({"id": doc_id, "text": text, "metadata": None})
 
     queries: Dict[str, str] = {}
     for item in queries_ds:
-        qid = str(item.get("query-id") or item.get("qid") or item.get("id"))
-        text = str(item.get("query") or item.get("text") or item.get("question") or "")
-        queries[qid] = text
+        qid = str(item.get("_id"))
+        text = item.get("text")
+        if qid and text:
+            queries[qid] = text
 
     qrels: Dict[str, List[str]] = {}
     for item in qrels_ds:
-        qid = str(item.get("query-id") or item.get("qid") or item.get("id"))
-        doc_id = str(item.get("corpus-id") or item.get("doc_id") or item.get("did") or item.get("doc"))
-        label = int(item.get("score") or item.get("label") or 0)
-        if label != 0:
+        qid = str(item.get("query-id"))
+        doc_id = str(item.get("corpus-id"))
+        label = int(item.get("score"))
+        if label != 0 and qid and doc_id:
             qrels.setdefault(qid, []).append(doc_id)
 
     return docs, queries, qrels

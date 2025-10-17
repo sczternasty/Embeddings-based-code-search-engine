@@ -1,4 +1,5 @@
 from __future__ import annotations
+import os
 from typing import List, Tuple
 import numpy as np
 from sentence_transformers import SentenceTransformer
@@ -6,8 +7,9 @@ from usearch.index import Index as USearchIndex
 
 
 class EmbeddingSearchEngine:
-    def __init__(self, model_name: str = "all-MiniLM-L6-v2") -> None:
+    def __init__(self, model_name: str = "all-MiniLM-L6-v2", model_path: str | None = None) -> None:
         self.model_name = model_name
+        self.model_path = model_path
         self._model: SentenceTransformer | None = None
         self._doc_ids: List[str] = []
         self._doc_texts: List[str] = []
@@ -17,10 +19,13 @@ class EmbeddingSearchEngine:
     @property
     def model(self) -> SentenceTransformer:
         if self._model is None:
-            name = self.model_name
-            if "/" not in name:
-                name = f"sentence-transformers/{name}"
-            self._model = SentenceTransformer(name, device="cpu")
+            if self.model_path and os.path.exists(self.model_path):
+                self._model = SentenceTransformer(self.model_path, device="cpu")
+            else:
+                name = self.model_name
+                if "/" not in name:
+                    name = f"sentence-transformers/{name}"
+                self._model = SentenceTransformer(name, device="cpu")
         return self._model
 
     def _ensure_usearch_index(self) -> None:
