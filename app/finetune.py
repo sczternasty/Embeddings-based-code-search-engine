@@ -15,7 +15,21 @@ from tqdm import tqdm
 
 
 class CodeSearchDataset(Dataset):
+    """
+    Dataset class for code search fine-tuning.
+    
+    Creates positive and negative query-code pairs from CoSQA dataset for training.
+    """
+    
     def __init__(self, queries: Dict[str, str], qrels: Dict[str, List[str]], corpus: Dict[str, str]):
+        """
+        Initialize dataset with query-code pairs.
+        
+        Args:
+            queries: Dictionary mapping query IDs to query text
+            qrels: Dictionary mapping query IDs to lists of relevant document IDs
+            corpus: Dictionary mapping document IDs to document text
+        """
         self.examples = []
         for qid, query_text in queries.items():
             relevant_docs = qrels.get(qid, [])
@@ -34,14 +48,23 @@ class CodeSearchDataset(Dataset):
                     label=0.0
                 ))
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.examples)
 
-    def __getitem__(self, idx):
+    def __getitem__(self, idx: int) -> InputExample:
         return self.examples[idx]
 
 
 def load_cosqa_data(split: str = "train") -> Tuple[Dict[str, str], Dict[str, str], Dict[str, List[str]]]:
+    """
+    Load CoSQA dataset for fine-tuning.
+    
+    Args:
+        split: Dataset split to load ('train', 'valid', 'test')
+        
+    Returns:
+        Tuple containing (queries, corpus, qrels) dictionaries
+    """
     corpus_ds = load_dataset("CoIR-Retrieval/cosqa", "corpus", split='corpus')
     queries_ds = load_dataset("CoIR-Retrieval/cosqa", "queries", split='queries')
     qrels_ds = load_dataset("CoIR-Retrieval/cosqa", "default", split=split)
@@ -72,6 +95,17 @@ def load_cosqa_data(split: str = "train") -> Tuple[Dict[str, str], Dict[str, str
 
 
 def create_evaluation_data(queries: Dict[str, str], corpus: Dict[str, str], qrels: Dict[str, List[str]]) -> List[Tuple[str, str, float]]:
+    """
+    Create evaluation data for model validation.
+    
+    Args:
+        queries: Dictionary mapping query IDs to query text
+        corpus: Dictionary mapping document IDs to document text
+        qrels: Dictionary mapping query IDs to lists of relevant document IDs
+        
+    Returns:
+        List of tuples containing (query_text, document_text, relevance_score)
+    """
     eval_data = []
     for qid, query_text in queries.items():
         relevant_docs = qrels.get(qid, [])
@@ -100,7 +134,25 @@ def train_model(
     batch_size: int = 16,
     learning_rate: float = 2e-5
 ) -> List[float]:
+    """
+    Train a sentence transformer model for code search.
     
+    Args:
+        model_name: Name of the base sentence transformer model
+        train_queries: Training queries dictionary
+        train_corpus: Training corpus dictionary
+        train_qrels: Training relevance judgments
+        val_queries: Validation queries dictionary
+        val_corpus: Validation corpus dictionary
+        val_qrels: Validation relevance judgments
+        output_path: Path to save the trained model
+        num_epochs: Number of training epochs
+        batch_size: Training batch size
+        learning_rate: Learning rate for optimization
+        
+    Returns:
+        List of average loss values per epoch
+    """
     model = SentenceTransformer(model_name)
     
     train_dataset = CodeSearchDataset(train_queries, train_qrels, train_corpus)
@@ -145,13 +197,19 @@ def train_model(
         
         avg_loss = np.mean(epoch_losses)
         loss_history.append(avg_loss)
-        print(f"Epoch {epoch+1} - Average Loss: {avg_loss:.4f}")
     
     model.save(output_path)
     return loss_history
 
 
-def plot_training_loss(loss_history: List[float], output_path: str):
+def plot_training_loss(loss_history: List[float], output_path: str) -> None:
+    """
+    Plot and save training loss curve.
+    
+    Args:
+        loss_history: List of loss values per epoch
+        output_path: Path to save the plot
+    """
     plt.figure(figsize=(10, 6))
     plt.plot(range(1, len(loss_history) + 1), loss_history, 'b-', linewidth=2, marker='o')
     plt.xlabel('Epoch')
@@ -174,16 +232,8 @@ def main():
 
     os.makedirs(args.output_dir, exist_ok=True)
 
-    print("Loading CoSQA training data...")
     train_queries, train_corpus, train_qrels = load_cosqa_data("train")
-    
-    print("Loading CoSQA validation data...")
     val_queries, val_corpus, val_qrels = load_cosqa_data("valid")
-
-    print(f"Training samples: {len(train_queries)} queries, {len(train_corpus)} documents")
-    print(f"Validation samples: {len(val_queries)} queries, {len(val_corpus)} documents")
-
-    print("Starting fine-tuning...")
     loss_history = train_model(
         model_name=args.model_name,
         train_queries=train_queries,
@@ -199,9 +249,6 @@ def main():
     )
 
     plot_training_loss(loss_history, os.path.join(args.output_dir, "training_loss.png"))
-    
-    print(f"Fine-tuning completed. Model saved to {args.output_dir}")
-    print(f"Final training loss: {loss_history[-1]:.4f}")
 
 
 if __name__ == "__main__":

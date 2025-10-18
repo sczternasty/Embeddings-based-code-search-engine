@@ -6,24 +6,20 @@ from sentence_transformers import SentenceTransformer
 from usearch.index import Index as USearchIndex
 
 
-class EmbeddingSearchEngine:
-    """
-    Embedding-based search engine using sentence transformers and vector similarity.
-    
-    This engine creates embeddings for documents and queries, then performs
-    efficient similarity search using USearch for fast retrieval.
-    """
-    
-    def __init__(self, model_name: str = "all-MiniLM-L6-v2", model_path: str | None = None) -> None:
-        """
-        Initialize the search engine.
-        
-        Args:
-            model_name: Name of the sentence transformer model
-            model_path: Optional path to a fine-tuned model
-        """
+class ConfigurableEmbeddingSearchEngine:
+    def __init__(
+        self, 
+        model_name: str = "all-MiniLM-L6-v2", 
+        model_path: str | None = None,
+        metric: str = "cos",
+        dtype: str = "f32",
+        connectivity: int = 16
+    ) -> None:
         self.model_name = model_name
         self.model_path = model_path
+        self.metric = metric
+        self.dtype = dtype
+        self.connectivity = connectivity
         self._model: SentenceTransformer | None = None
         self._doc_ids: List[str] = []
         self._doc_texts: List[str] = []
@@ -32,7 +28,6 @@ class EmbeddingSearchEngine:
 
     @property
     def model(self) -> SentenceTransformer:
-        """Lazy initialization of the sentence transformer model."""
         if self._model is None:
             if self.model_path and os.path.exists(self.model_path):
                 self._model = SentenceTransformer(self.model_path, device="cpu")
@@ -44,26 +39,15 @@ class EmbeddingSearchEngine:
         return self._model
 
     def _ensure_usearch_index(self) -> None:
-        """Initialize the USearch index if not already created."""
         if self._usearch_index is None:
             self._usearch_index = USearchIndex(
                 ndim=self.dimension,
-                metric="cos",
-                dtype="f32",
+                metric=self.metric,
+                dtype=self.dtype,
+                connectivity=self.connectivity,
             )
 
     def add_documents(self, ids: List[str], texts: List[str], metadata: List[dict | None] | None = None) -> None:
-        """
-        Add documents to the search index.
-        
-        Args:
-            ids: List of document identifiers
-            texts: List of document texts
-            metadata: Optional list of metadata dictionaries
-            
-        Raises:
-            ValueError: If input lists have different lengths
-        """
         if metadata is None:
             metadata = [None] * len(ids)
         if not (len(ids) == len(texts) == len(metadata)):
@@ -85,15 +69,6 @@ class EmbeddingSearchEngine:
         self._doc_metadata.extend(metadata)
 
     def _encode(self, texts: List[str]) -> np.ndarray:
-        """
-        Encode texts into embeddings.
-        
-        Args:
-            texts: List of texts to encode
-            
-        Returns:
-            Array of embeddings with shape (len(texts), dimension)
-        """
         if len(texts) == 0:
             return np.zeros((0, self.dimension), dtype=np.float32)
         vectors = self.model.encode(texts, batch_size=64, show_progress_bar=False, normalize_embeddings=False)
@@ -101,21 +76,11 @@ class EmbeddingSearchEngine:
 
     @property
     def dimension(self) -> int:
-        """Get the embedding dimension of the model."""
         _ = self.model
         return int(self.model.get_sentence_embedding_dimension())
 
     @staticmethod
     def _normalize(vectors: np.ndarray) -> np.ndarray:
-        """
-        Normalize vectors to unit length for cosine similarity.
-        
-        Args:
-            vectors: Array of vectors to normalize
-            
-        Returns:
-            Normalized vectors
-        """
         if vectors.size == 0:
             return vectors
         norms = np.linalg.norm(vectors, axis=1, keepdims=True)
@@ -123,16 +88,6 @@ class EmbeddingSearchEngine:
         return vectors / norms
 
     def search(self, query: str, k: int = 5) -> List[Tuple[str, str, float, dict | None]]:
-        """
-        Search for similar documents.
-        
-        Args:
-            query: Search query text
-            k: Number of results to return
-            
-        Returns:
-            List of tuples containing (doc_id, text, similarity_score, metadata)
-        """
         if len(self._doc_ids) == 0:
             return []
 
@@ -144,7 +99,15 @@ class EmbeddingSearchEngine:
         keys = np.asarray(neighbors.keys)
         dists = np.asarray(neighbors.distances, dtype=np.float32)
 
-        sims = 1.0 - dists
+        if self.metric == "cos":
+            sims = 1.0 - dists
+        elif self.metric == "l2":
+            sims = 1.0 / (1.0 + dists)
+        elif self.metric == "ip":
+            sims = dists
+        else:
+            sims = 1.0 - dists
+
         order = np.argsort(-sims)
         keys = keys[order]
         sims = sims[order]
